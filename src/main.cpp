@@ -7,7 +7,7 @@
 
 #define FAN_PWM_PIN 9 //9 or 10 for UNO
 #define RPM_FAN_PIN 2   //2 or 3 for UNO 
-#define MIN_FAN_PERIOD 12000 //10000us for our settings, to be modified by a stall.
+#define MIN_FAN_PERIOD 6000 // 6000us or 9000us for our settings, to be modified by a stall.
 
 
 #define PULSE_PER_REV 2
@@ -15,9 +15,14 @@
 #define MAX_DUTY_CYCLE 100
 #define DEFAULT_DUTY_CYCLE 20
 #define RPM_READING_TIMEOUT 150  //in ms will set fan speed to 0 if timeout
+#define RPM_THRESHOLD 1000 //FAN DATASHEET 
+#define LEAK_INTEGRATOR 1
+#define ALPHA_LEAK_INTEGRATOR 0.8// Leak Integrator 0 = no filter 1 = filter with 0 Hz frequency cut
+
 
 // fan command
 float dutyCycle = DEFAULT_DUTY_CYCLE;
+
 
 //fan reading
 volatile unsigned long t0 = micros();
@@ -26,7 +31,7 @@ volatile boolean flag_fanPeriod = false;
 
 float instantFanSpeed = 0;
 float averageFanSpeed = 0; // for moving average
-float  alpha = 0.8;//0.8; // 0 = no filter 1 = filter with 0 Hz frequency cut
+
 
 
 
@@ -41,7 +46,7 @@ boolean newData = false;
 void recvWithEndMarker(void);
 int dutyFromSerial(void);
 void getFanPeriod(void);
-float getFanSpeed(void);
+float getFanSpeed(boolean leakyIntegrator);
 
 
 
@@ -69,10 +74,9 @@ void loop()
     }
     Timer1.pwm(FAN_PWM_PIN, (dutyCycle / 100) * 1023);
 
-    Serial.println(getFanSpeed());
-    //getFanSpeed();
-    //Serial.println(100*abs(averageFanSpeed-instantFanSpeed)/averageFanSpeed);  
-
+    float fan_speed = getFanSpeed(LEAK_INTEGRATOR);
+    Serial.println(fan_speed);
+        
     //DUBUGING Diplay RPM readings
     /**if (flag_fanPeriod == 1){
       Serial.print("fan period: ");Serial.print(fanPeriod);Serial.println("  us");
@@ -84,26 +88,18 @@ void loop()
     //delay(10);
 }
 
-
-
-
-float getFanSpeed(void) {
+float getFanSpeed(boolean leakyIntegrator) {
   long timestamp = millis();
   while ((millis() - timestamp) < RPM_READING_TIMEOUT && (flag_fanPeriod == false)) ; //wait for both timeout and update
   //timeout, check update
   if (flag_fanPeriod == 1)  {
     instantFanSpeed = 60*1000000/ (PULSE_PER_REV * fanPeriod);
-    
-    /**if(instantFanSpeed > 500 && averageFanSpeed > 100 && (100*abs(averageFanSpeed-instantFanSpeed)/averageFanSpeed)>50.0)
-    {
-      instantFanSpeed = averageFanSpeed;
-    }*/
-    // Does not work together with the leaky integrator 
-
-    //averageFanSpeed = instantFanSpeed;
-
+  
+    averageFanSpeed = instantFanSpeed;
     // Leaky integrator to smooth data (= low pass filter alpha=0 no filter alpha = 1 all data are filtered)
-    averageFanSpeed = alpha * averageFanSpeed + (1-alpha) *  instantFanSpeed;
+    if(leakyIntegrator){
+      averageFanSpeed = ALPHA_LEAK_INTEGRATOR * averageFanSpeed + (1-ALPHA_LEAK_INTEGRATOR) *  instantFanSpeed;
+    }
     flag_fanPeriod = false;
   } 
   else{
