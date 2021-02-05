@@ -6,7 +6,7 @@
 
 
 #define FAN_PWM_PIN 9 //9 or 10 for UNO
-#define RPM_FAN_PIN 2   //2 or 3 for UNO 
+#define RPM_FAN_PIN 7   //(2 or 3 for UNO) | 0, 1, 2, 3, 7 for micro
 #define MIN_FAN_PERIOD 6000 // 6000us or 9000us for our settings, to be modified by a stall.
 
 
